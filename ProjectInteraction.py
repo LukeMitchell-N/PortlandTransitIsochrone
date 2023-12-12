@@ -11,7 +11,7 @@ point_name = 'start_point_test'
 streets_name = '1HrWalkableRoads_NoHighways'
 route_stops_name = 'trimet_route_stops'
 stops_name = 'trimet_stops'
-routes_name = 'trimet_routes_kph'
+routes_name = 'trimet_routes'
 
 start_point_layer = QgsProject.instance().mapLayersByName(point_name)[0]
 street_layer = QgsProject.instance().mapLayersByName(streets_name)[0]
@@ -70,7 +70,7 @@ def find_stops_transit(start_node, route, stops):
                                          geometryCheck=QgsFeatureRequest.GeometryAbortOnInvalid),
                                          'STRATEGY': 1, 'DIRECTION_FIELD': 'DIR', 'VALUE_FORWARD': direction,
                                          'VALUE_BACKWARD': reverse, 'VALUE_BOTH': '', 'DEFAULT_DIRECTION': direction,
-                                         'SPEED_FIELD': 'K_FT_PR_HR', 'DEFAULT_SPEED': 50, 'TOLERANCE': 0,
+                                         'SPEED_FIELD': 'KILO_FT_PER_HOUR', 'DEFAULT_SPEED': 1, 'TOLERANCE': 0,
                                          'START_POINT': lat_lon_str,
                                          'END_POINTS': QgsProcessingFeatureSourceDefinition(
                                              stops_uri,
@@ -102,7 +102,7 @@ def get_reachable_stops_walking(start_node):
     # Get rid of all stops that exceed the time remaining
     remove_unreachable_stops(search_routes, start_node.time)
 
-    QgsProject.instance().addMapLayer(search_routes)
+    #QgsProject.instance().addMapLayer(search_routes)
 
     return search_routes
 
@@ -123,7 +123,7 @@ def get_reachable_stops_transit(start_node):
 
     transit_routes.append(search_routes)
 
-    QgsProject.instance().addMapLayer(search_routes)
+    #QgsProject.instance().addMapLayer(search_routes)
 
     return search_routes
 

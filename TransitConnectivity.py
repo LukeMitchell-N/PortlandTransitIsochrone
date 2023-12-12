@@ -83,11 +83,11 @@ def add_search_nodes(paths, node, add_to_walk_search):
                 if not routes_layer.selectedFeatures():
                     continue
                 next_route = routes_layer.selectedFeatures()[0]
-                if next_route['TRIP_PR_HR'] == 0:
+                if next_route['TRIPS_PER_HOUR'] == 0:
                     continue
 
                 # Average wait is half of the headway of the route
-                avg_wait = (1 / next_route['TRIP_PR_HR']) / 2
+                avg_wait = (1 / next_route['TRIPS_PER_HOUR']) / 2
                 departure_time = node.time + f['cost'] + avg_wait
                 routes_layer.removeSelection()
 
