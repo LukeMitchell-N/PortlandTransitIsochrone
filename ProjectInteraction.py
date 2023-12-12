@@ -3,7 +3,7 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingException,
                        QgsProcessingAlgorithm,
                        QgsFeature,
-                       QgsProject,
+                       QgsProject, 
                        QgsProcessingFeatureSourceDefinition)
 from qgis import processing
 
@@ -11,7 +11,7 @@ point_name = 'start_point_test'
 streets_name = '1HrWalkableRoads_NoHighways'
 route_stops_name = 'trimet_route_stops'
 stops_name = 'trimet_stops'
-routes_name = 'trimetroutes_kph'
+routes_name = 'trimet_routes_kph'
 
 start_point_layer = QgsProject.instance().mapLayersByName(point_name)[0]
 street_layer = QgsProject.instance().mapLayersByName(streets_name)[0]
@@ -135,7 +135,7 @@ def create_service_area(start_node, streets):
         'INPUT': streets,
         'STRATEGY': 1, 'DIRECTION_FIELD': '', 'VALUE_FORWARD': '', 'VALUE_BACKWARD': '', 'VALUE_BOTH': '',
         'DEFAULT_DIRECTION': 2, 'SPEED_FIELD': '', 'DEFAULT_SPEED': ft_to_m * walk_km_per_hour, 'TOLERANCE': 0,
-        'START_POINT': lat_lon_str, 'TRAVEL_COST2': start_node.time, 'INCLUDE_BOUNDS': False,
+        'START_POINT': lat_lon_str, 'TRAVEL_COST2': total_time - start_node.time, 'INCLUDE_BOUNDS': False,
         'OUTPUT_LINES': 'TEMPORARY_OUTPUT'})['OUTPUT_LINES']
 
     service_areas.append(service_area)

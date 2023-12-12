@@ -37,16 +37,16 @@ def should_add_search_node(key, dictionary, time):
     if key not in dictionary:
         return True
 
-    return time < dictionary[key]
+    #return time < dictionary[key]
 
-    '''
+
     time_remaining = total_time - time
     prev_time_remaining = total_time - dictionary[key]
     if time_remaining > prev_time_remaining * repeat_search_threshold:
         return True
 
     return False
-    '''
+
 
 # Takes a path to a new node and adds it to correct list
 def add_search_node(feature, departing_time, add_to_walk_search, next_dictionary, next_layer):
@@ -219,4 +219,3 @@ def init_search():
     perform_search()
 
 init_search()
-
