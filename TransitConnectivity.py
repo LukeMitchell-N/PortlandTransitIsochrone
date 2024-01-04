@@ -1,10 +1,12 @@
 import bisect
+import time
 from qgis.core import QgsProcessingFeatureSourceDefinition
 import ProjectInteraction
 next_nodes = []
 walk_nodes_dictionary = {}
 transit_nodes_dictionary = {}
-repeat_search_threshold = 1.0
+repeat_search_threshold = 10
+repeat_count = 0
 
 
 class SearchStart:
@@ -43,6 +45,8 @@ def should_add_search_node(key, dictionary, time):
     time_remaining = total_time - time
     prev_time_remaining = total_time - dictionary[key]
     if time_remaining > prev_time_remaining * repeat_search_threshold:
+        global repeat_count
+        repeat_count += 1
         return True
 
     return False
@@ -189,16 +193,27 @@ def perform_walk_search(node):
     add_search_nodes(path_features_sorted, node, False)
 
 
+def print_elapsed_time(seconds):
+    sec = seconds % (24 * 3600)
+    hour = sec // 3600
+    sec %= 3600
+    min = sec // 60
+    sec %= 60
+    #print("seconds value in hours:", hour)
+    #print("seconds value in minutes:", min)
+    #return "%02d:%02d:%02d" % (hour, min, sec)
+    return "%02d:%02d:%02d" % (hour, min, sec)
+
 def perform_search():
     count = 0
     while next_nodes:
         count+=1
-        print_search_list()
+        #print_search_list()
 
         search_origin = pick_next()
         if search_origin:
             mode = "transit" if search_origin.is_transit_node else "walking"
-            print(f"Beginning {mode} search from point {search_origin.id}")
+            #print(f"Beginning {mode} search from point {search_origin.id}")
 
             if search_origin.is_transit_node:
                 perform_transit_search(search_origin)
@@ -207,8 +222,6 @@ def perform_search():
         #if count >= 20:
            #return
     print("All done!")
-    get_walking_service_area(walk_nodes_dictionary)
-    get_transit_service_area()
 
 
 def init_search():
@@ -216,6 +229,24 @@ def init_search():
         transit_nodes_dictionary, False, True)
     next_nodes.append(init_node)
     init_node.dictionary[init_node.id] = init_node.time
+
+    start_time = time.perf_counter()
     perform_search()
+    end_time = time.perf_counter()
+    print(f"Elapsed search time: {print_elapsed_time(end_time - start_time)}")
+
 
 init_search()
+start_time = time.perf_counter()
+get_walking_service_area()
+end_time = time.perf_counter()
+print(f"    + Elapsed time performing dissolve on walk: {print_elapsed_time(end_time - start_time)}")
+
+start_time = time.perf_counter()
+get_transit_service_area()
+end_time = time.perf_counter()
+print(f"    + Elapsed time performing dissolve on transit: {print_elapsed_time(end_time - start_time)}")
+
+print(f"Searched from {len(walk_nodes_dictionary.keys())} walk nodes")
+print(f"    Repeated searches from {repeat_count} nodes")
+print(f"Searched from {len(transit_nodes_dictionary.keys())} transit nodes")

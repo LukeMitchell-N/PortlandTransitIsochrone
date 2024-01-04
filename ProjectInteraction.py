@@ -19,10 +19,10 @@ route_stops_layer = QgsProject.instance().mapLayersByName(route_stops_name)[0]
 stops_layer = QgsProject.instance().mapLayersByName(stops_name)[0]
 routes_layer = QgsProject.instance().mapLayersByName(routes_name)[0]
 
-service_areas = []
+service_areas = None
 transit_routes = []
 
-total_time = .15
+total_time = .5
 walk_feet_per_hour = 14784  #feet walkable in one hour \
     #assuming a walking speed of 2.8 mph
 walk_km_per_hour = 4.50616
@@ -89,18 +89,21 @@ def get_reachable_stops_walking(start_node):
     buffer = create_buffer(start_node, max_distance)
 
     # Clip the street layer to only search relevant streets
-    potential_streets = clip_layer(street_layer, buffer, "clipped streets")
+    nearby_streets = clip_layer(street_layer, buffer, "clipped streets")
 
     # Clip stop layer to only search relevant stops
-    potential_stops = clip_layer(route_stops_layer, buffer, "clipped stops")
+    nearby_stops = clip_layer(route_stops_layer, buffer, "clipped stops")
 
     # Search the network to find all reachable stops
-    search_routes = find_stops_walking(start_node, potential_streets, potential_stops)
-
-    service_area = create_service_area(start_node, potential_streets)
+    search_routes = find_stops_walking(start_node, nearby_streets, nearby_stops)
 
     # Get rid of all stops that exceed the time remaining
     remove_unreachable_stops(search_routes, start_node.time)
+
+    # Get the walking service area from that node (not just the paths to nearby stops
+    # but all street segments reachable from the node)
+    service_area = create_service_area(start_node, nearby_streets)
+    save_service_area(service_area)
 
     #QgsProject.instance().addMapLayer(search_routes)
 
@@ -138,25 +141,44 @@ def create_service_area(start_node, streets):
         'START_POINT': lat_lon_str, 'TRAVEL_COST2': total_time - start_node.time, 'INCLUDE_BOUNDS': False,
         'OUTPUT_LINES': 'TEMPORARY_OUTPUT'})['OUTPUT_LINES']
 
-    service_areas.append(service_area)
+    return service_area
 
-def get_walking_service_area(walk_nodes_dictionary):
-    reachable_stops = create_reachable_stops_layer(walk_nodes_dictionary)
 
-    merged_layer = processing.run("qgis:mergevectorlayers", {
-        'LAYERS': service_areas,
-        'OUTPUT':  'TEMPORARY_OUTPUT'})['OUTPUT']
-    merged_layer.setName("Walking Service Area")
+def save_service_area(new_area):
+    global service_areas
+    if service_areas == None:
+        service_areas = new_area
+    else:
+        service_areas = processing.run("native:mergevectorlayers", {
+            'LAYERS': [service_areas,
+                       new_area], 'CRS': None,
+            'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+        if service_areas.featureCount() > 10:
+            service_areas = processing.run("native:dissolve", {
+                'INPUT': service_areas, 'FIELD': [], 'SEPARATE_DISJOINT': False,
+                'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
-    QgsProject.instance().addMapLayer(merged_layer)
+
+def get_walking_service_area():
+    global service_areas
+    if service_areas.featureCount() > 1:
+        service_areas = processing.run("native:dissolve", {
+        'INPUT': service_areas, 'FIELD': [], 'SEPARATE_DISJOINT': False,
+        'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+
+    service_areas.setName(f"Accessible street network - {total_time}")
+    QgsProject.instance().addMapLayer(service_areas)
 
 def get_transit_service_area():
     merged_layer = processing.run("qgis:mergevectorlayers", {
         'LAYERS': transit_routes,
         'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
-    merged_layer.setName("Transit Service Area")
+    final_transit_layer = processing.run("native:dissolve", {
+        'INPUT': merged_layer, 'FIELD': [], 'SEPARATE_DISJOINT': False,
+        'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
-    QgsProject.instance().addMapLayer(merged_layer)
+    final_transit_layer.setName(f"Accessible transit network - {total_time}")
+    QgsProject.instance().addMapLayer(final_transit_layer)
 
 
 # ********************************************************************************************************
@@ -222,6 +244,8 @@ def remove_unreachable_stops(paths, start_time):
         if f['cost']:
             if start_time + f['cost'] > total_time:
                 unreachable.append(f.id())
+        else:
+            unreachable.append(f.id())
     paths.dataProvider().deleteFeatures(unreachable)
     paths.triggerRepaint()
 
