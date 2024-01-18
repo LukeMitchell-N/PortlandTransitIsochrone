@@ -19,10 +19,10 @@ route_stops_layer = QgsProject.instance().mapLayersByName(route_stops_name)[0]
 stops_layer = QgsProject.instance().mapLayersByName(stops_name)[0]
 routes_layer = QgsProject.instance().mapLayersByName(routes_name)[0]
 
-service_areas = None
-transit_routes = []
+walking_service_area = None
+transit_service_area = None
 
-total_time = .5
+total_time = 1
 walk_feet_per_hour = 14784  #feet walkable in one hour \
     #assuming a walking speed of 2.8 mph
 walk_km_per_hour = 4.50616
@@ -102,8 +102,10 @@ def get_reachable_stops_walking(start_node):
 
     # Get the walking service area from that node (not just the paths to nearby stops
     # but all street segments reachable from the node)
-    service_area = create_service_area(start_node, nearby_streets)
-    save_service_area(service_area)
+    local_service_area = create_walking_service_area(start_node, nearby_streets)
+    global walking_service_area
+    walking_service_area = save_service_area(walking_service_area, local_service_area)
+
 
     #QgsProject.instance().addMapLayer(search_routes)
 
@@ -124,61 +126,52 @@ def get_reachable_stops_transit(start_node):
     # Get rid of all stops that exceed the time remaining
     remove_unreachable_stops(search_routes, start_node.time)
 
-    transit_routes.append(search_routes)
+    #global transit_service_area
+    global transit_service_area
+    transit_service_area = save_service_area(transit_service_area, search_routes)
 
     #QgsProject.instance().addMapLayer(search_routes)
 
     return search_routes
 
 
-def create_service_area(start_node, streets):
+def create_walking_service_area(start_node, streets):
     lat_lon_str = start_node.get_coord_string()
 
-    service_area = processing.run("native:serviceareafrompoint", {
+    return processing.run("native:serviceareafrompoint", {
         'INPUT': streets,
         'STRATEGY': 1, 'DIRECTION_FIELD': '', 'VALUE_FORWARD': '', 'VALUE_BACKWARD': '', 'VALUE_BOTH': '',
         'DEFAULT_DIRECTION': 2, 'SPEED_FIELD': '', 'DEFAULT_SPEED': ft_to_m * walk_km_per_hour, 'TOLERANCE': 0,
         'START_POINT': lat_lon_str, 'TRAVEL_COST2': total_time - start_node.time, 'INCLUDE_BOUNDS': False,
         'OUTPUT_LINES': 'TEMPORARY_OUTPUT'})['OUTPUT_LINES']
 
-    return service_area
 
+def save_service_area(total_area, new_area):
 
-def save_service_area(new_area):
-    global service_areas
-    if service_areas == None:
-        service_areas = new_area
+    if total_area is None:
+        total_area = new_area
     else:
-        service_areas = processing.run("native:mergevectorlayers", {
-            'LAYERS': [service_areas,
+        total_area = processing.run("native:mergevectorlayers", {
+            'LAYERS': [total_area,
                        new_area], 'CRS': None,
             'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
-        if service_areas.featureCount() > 10:
-            service_areas = processing.run("native:dissolve", {
-                'INPUT': service_areas, 'FIELD': [], 'SEPARATE_DISJOINT': False,
-                'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+        if total_area.featureCount() > 7:
+            total_area = dissolve_layer(total_area)
+    return total_area
+    
+    
+def get_service_areas():
+    global walking_service_area
+    if walking_service_area.featureCount() > 1:
+        walking_service_area = dissolve_layer(walking_service_area)
+    walking_service_area.setName(f"Accessible street network - {total_time}")
+    QgsProject.instance().addMapLayer(walking_service_area)
 
-
-def get_walking_service_area():
-    global service_areas
-    if service_areas.featureCount() > 1:
-        service_areas = processing.run("native:dissolve", {
-        'INPUT': service_areas, 'FIELD': [], 'SEPARATE_DISJOINT': False,
-        'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
-
-    service_areas.setName(f"Accessible street network - {total_time}")
-    QgsProject.instance().addMapLayer(service_areas)
-
-def get_transit_service_area():
-    merged_layer = processing.run("qgis:mergevectorlayers", {
-        'LAYERS': transit_routes,
-        'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
-    final_transit_layer = processing.run("native:dissolve", {
-        'INPUT': merged_layer, 'FIELD': [], 'SEPARATE_DISJOINT': False,
-        'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
-
-    final_transit_layer.setName(f"Accessible transit network - {total_time}")
-    QgsProject.instance().addMapLayer(final_transit_layer)
+    global transit_service_area
+    if transit_service_area.featureCount() > 1:
+        transit_service_area = dissolve_layer(transit_service_area)
+    transit_service_area.setName(f"Accessible transit network - {total_time}")
+    QgsProject.instance().addMapLayer(transit_service_area)
 
 
 # ********************************************************************************************************
@@ -214,6 +207,11 @@ def clip_layer(layer, overlay, name):
     #QgsProject.instance().addMapLayer(clipped)
     return clipped
 
+
+def dissolve_layer(layer):
+    return processing.run("native:dissolve", {
+        'INPUT': layer, 'FIELD': [], 'SEPARATE_DISJOINT': False,
+        'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
 '''
 def clone_layer(layer, name):

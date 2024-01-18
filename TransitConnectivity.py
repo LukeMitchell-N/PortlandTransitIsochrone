@@ -238,15 +238,11 @@ def init_search():
 
 init_search()
 start_time = time.perf_counter()
-get_walking_service_area()
+get_service_areas()
 end_time = time.perf_counter()
-print(f"    + Elapsed time performing dissolve on walk: {print_elapsed_time(end_time - start_time)}")
-
-start_time = time.perf_counter()
-get_transit_service_area()
-end_time = time.perf_counter()
-print(f"    + Elapsed time performing dissolve on transit: {print_elapsed_time(end_time - start_time)}")
+print(f"    + Elapsed time performing final dissolves: {print_elapsed_time(end_time - start_time)}")
 
 print(f"Searched from {len(walk_nodes_dictionary.keys())} walk nodes")
-print(f"    Repeated searches from {repeat_count} nodes")
 print(f"Searched from {len(transit_nodes_dictionary.keys())} transit nodes")
+print(f"    Repeated searches from {repeat_count} nodes")
+
