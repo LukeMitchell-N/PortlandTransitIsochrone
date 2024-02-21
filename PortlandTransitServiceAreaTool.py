@@ -10,23 +10,23 @@ import ServiceAreaSearch
 reload(ServiceAreaSearch)
 
 
-class PortlandTransitServiceArea(QgsProcessingAlgorithm):
+class TransitServiceArea(QgsProcessingAlgorithm):
 
     def tr(self, string):
         return QCoreApplication.translate('Processing', string)
 
     def createInstance(self):
-        return PortlandTransitServiceArea()
+        return TransitServiceArea()
 
     def name(self):
-        return 'transitserviceareasearch'
+        return 'transitservicearea'
 
     def displayName(self):
-        return self.tr('Transit Service Area Search')
+        return self.tr('Transit Service Area')
 
 
     def shortHelpString(self):
-        return self.tr('Generates a public transit service area for any point in the Portland metropolitan area')
+        return self.tr('Generates an accurate public transit service area for any point in the Portland metropolitan area given a time limit.')
 
     def initAlgorithm(self, config=None):
         self.addParameter(
@@ -52,11 +52,13 @@ class PortlandTransitServiceArea(QgsProcessingAlgorithm):
 
     def processAlgorithm(self, parameters, context, feedback):
         start_location = self.parameterAsString(parameters, 'STARTLOCATION', context)
-        search_time = self.parameterAsInt(parameters, 'SEARCHTIMELIMIT', context) / 60
-
+        search_time_min = self.parameterAsInt(parameters, 'SEARCHTIMELIMIT', context)
+        search_time_hour = search_time_min/ 60
+        name = f"Point - {search_time_min} minute service area"
         if feedback.isCanceled():
             return {}
 
-        ServiceAreaSearch.main(start_location, search_time, feedback)
+        #print(f"Start Location: {start_location}")
+        ServiceAreaSearch.main(name, start_location, search_time_hour, context, feedback)
 
         return {}

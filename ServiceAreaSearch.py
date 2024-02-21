@@ -7,7 +7,9 @@ from ProjectInteraction import *
 
 
 from qgis.core import (QgsFeatureRequest,
-                       QgsExpression)
+                       QgsExpression,
+                       QgsProject)
+from qgis.PyQt import QtGui
 
 
 class SearchStart:
@@ -42,8 +44,10 @@ class SearchStart:
         return self.time < other.time
 
 class Search:
-    def __init__(self, time_limit):
+    def __init__(self, time_limit, context, feedback):
         self.time_limit = time_limit
+        self.context = context
+        self.feedback = feedback
         self.next_nodes = []
         self.walk_nodes_dictionary = {}
         self.transit_nodes_dictionary = {}
@@ -72,22 +76,39 @@ class Search:
         print(f"    Repeated searches from {self.repeat_count} nodes")
 
 
-    def get_service_areas(self):
-        if self.walking_service_area is not None:
-            if self.walking_service_area.featureCount() > 1:
-                self.walking_service_area = dissolve_layer(self.walking_service_area)
-            self.walking_service_area.setName(f"Accessible street network - {self.time_limit}")
-            polygon_layer = polygonize(self.walking_service_area)
-            add_layer(polygon_layer)
-            add_layer(self.walking_service_area)
-        else:
-            print("walking service area is None")
+    def get_results(self, name):
+        root = QgsProject.instance().layerTreeRoot()
+        group = root.addGroup(name)
 
         if self.transit_service_area is not None:
+            # Perform final dissolve if necessary
             if self.transit_service_area.featureCount() > 1:
-                self.transit_service_area = dissolve_layer(self.transit_service_area)
-            self.transit_service_area.setName(f"Accessible transit network - {self.time_limit}")
-            add_layer(self.transit_service_area)
+                self.transit_service_area = dissolve_layer(self.transit_service_area, self.context, self.feedback)
+            add_layer(self.transit_service_area, f" {name } - Accessible transit network", group)
+        else:
+            print("No transit service area found")
+
+        if self.walking_service_area is not None:
+            # Perform final dissolve if necessary
+            if self.walking_service_area.featureCount() > 1:
+                self.walking_service_area = dissolve_layer(self.walking_service_area, self.context, self.feedback)
+            add_layer(self.walking_service_area, f" {name } - Accessible street network", group)
+            self.create_polygon(group, name)
+        else:
+            print("No walking service area found")
+
+
+
+    def create_polygon(self, group, name):
+        polygon_layer = polygonize(self.walking_service_area, self.context, self.feedback)
+        renderer = polygon_layer.renderer()
+        #print(renderer.type())
+        symbol = renderer.symbol()
+        symbol.setColor(QtGui.QColor(255,0,0,100))
+        props = polygon_layer.renderer().symbol().symbolLayer(0).properties()
+        #print(f"Properties: {props}")
+        #symbol.setAlpha(.4)
+        add_layer(polygon_layer, f" {name } - Accessible blocks", group)
 
     # Get the feature ID for the correct layer
     #   If the search that yielded this feature was a transit search:
@@ -149,7 +170,7 @@ class Search:
                     departure_time = node.time + f['cost']
                 else:
                     # Select the route that will depart from this stop
-                    select_by_route(routes_layer, f['rte'], f['dir'])
+                    select_by_route(routes_layer, f['rte'], f['dir'], self.context, self.feedback)
                     if not routes_layer.selectedFeatures():
                         continue
                     next_route = routes_layer.selectedFeatures()[0]
@@ -208,7 +229,8 @@ class Search:
 
 
     def perform_transit_search(self, node):
-        paths_to_stops, self.transit_service_area = get_reachable_stops_transit(node, self.time_limit, self.transit_service_area)
+        paths_to_stops, self.transit_service_area = get_reachable_stops_transit(node, self.time_limit, self.transit_service_area,
+                                                                                self.context, self.feedback)
         path_features_sorted = sort_paths_by_cost(paths_to_stops)
         #print(f"Sorted path features: {path_features_sorted} and len: {len(list(path_features_sorted))}")
         self.update_network_dictionary(path_features_sorted,node.time)
@@ -216,13 +238,14 @@ class Search:
 
 
     def perform_walk_search(self, node):
-        paths_to_stops, self.walking_service_area = get_reachable_stops_walking(node, self.time_limit, self.walking_service_area)
+        paths_to_stops, self.walking_service_area = get_reachable_stops_walking(node, self.time_limit, self.walking_service_area,
+                                                                                self.context, self.feedback)
         path_features_sorted = sort_paths_by_cost(paths_to_stops)
         self.update_walking_dictionary(paths_to_stops.getFeatures(), node.time)
         self.add_search_nodes(path_features_sorted, node, False)
 
 
-    def perform_search(self, feedback):
+    def perform_search(self):
         while self.next_nodes:
             next_origin = self.pick_next()
             if next_origin:
@@ -234,14 +257,14 @@ class Search:
                 else:
                     self.perform_walk_search(next_origin)
             del next_origin
-            if feedback.isCanceled():
+            if self.feedback.isCanceled():
                 print("Cancelling search. Generating partial service layers.")
 
                 return
         # print("Search complete")
 
 
-    def init_search(self, origin_coords, feedback):
+    def init_search(self, origin_coords):
         # Prep starting node
         init_node = SearchStart(None, None, 0,
                                 self.transit_nodes_dictionary, False, True)
@@ -253,7 +276,7 @@ class Search:
 
         # Perform and time the search
         start_time = time.perf_counter()
-        self.perform_search(feedback)
+        self.perform_search()
         end_time = time.perf_counter()
         print(f"Elapsed search time: {print_elapsed_time(end_time - start_time)}")
 
@@ -273,14 +296,14 @@ def print_elapsed_time(seconds):
     return "%02d:%02d:%02d" % (hour, min, sec)
 
 
-def main(origin_coords, search_time, feedback):
-    s = Search(search_time)
-    s.init_search(origin_coords, feedback)
+def main(name, origin_coords, search_time, context, feedback):
+    s = Search(search_time, context, feedback)
+    s.init_search(origin_coords)
     #s.clean_up
 
 
     start_time = time.perf_counter()
-    s.get_service_areas()
+    s.get_results(name)
     end_time = time.perf_counter()
     print(f"    + Elapsed time performing final dissolves: {print_elapsed_time(end_time - start_time)}")
 
