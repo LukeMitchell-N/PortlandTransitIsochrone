@@ -84,7 +84,7 @@ class Search:
             # Perform final dissolve if necessary
             if self.transit_service_area.featureCount() > 1:
                 self.transit_service_area = dissolve_layer(self.transit_service_area, self.context, self.feedback)
-            add_layer(self.transit_service_area, f" {name } - Accessible transit network", group)
+            #add_layer(self.transit_service_area, f" {name } - Accessible transit network", group)
         else:
             print("No transit service area found")
 
@@ -92,7 +92,7 @@ class Search:
             # Perform final dissolve if necessary
             if self.walking_service_area.featureCount() > 1:
                 self.walking_service_area = dissolve_layer(self.walking_service_area, self.context, self.feedback)
-            add_layer(self.walking_service_area, f" {name } - Accessible street network", group)
+            #add_layer(self.walking_service_area, f" {name } - Accessible street network", group)
             self.create_polygon(group, name)
         else:
             print("No walking service area found")
@@ -100,7 +100,7 @@ class Search:
 
 
     def create_polygon(self, group, name):
-        polygon_layer = polygonize(self.walking_service_area, self.context, self.feedback)
+        polygon_layer = get_nearby_blocks(self.walking_service_area, self.context, self.feedback)
         renderer = polygon_layer.renderer()
         #print(renderer.type())
         symbol = renderer.symbol()
@@ -108,7 +108,8 @@ class Search:
         props = polygon_layer.renderer().symbol().symbolLayer(0).properties()
         #print(f"Properties: {props}")
         #symbol.setAlpha(.4)
-        add_layer(polygon_layer, f" {name } - Accessible blocks", group)
+        #add_layer(polygon_layer, f" {name } - Accessible blocks", group)
+        add_layer_to_gpkg(polygon_layer, f"{name}_{self.time_limit*60}")
 
     # Get the feature ID for the correct layer
     #   If the search that yielded this feature was a transit search:
@@ -238,8 +239,12 @@ class Search:
 
 
     def perform_walk_search(self, node):
-        paths_to_stops, self.walking_service_area = get_reachable_stops_walking(node, self.time_limit, self.walking_service_area,
+        result = get_reachable_stops_walking(node, self.time_limit, self.walking_service_area,
                                                                                 self.context, self.feedback)
+        if not result:
+            print("No result from perform_walk_search, returning")
+            return
+        paths_to_stops, self.walking_service_area = result
         path_features_sorted = sort_paths_by_cost(paths_to_stops)
         self.update_walking_dictionary(paths_to_stops.getFeatures(), node.time)
         self.add_search_nodes(path_features_sorted, node, False)

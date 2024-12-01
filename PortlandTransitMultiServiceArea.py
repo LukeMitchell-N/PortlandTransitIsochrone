@@ -73,12 +73,13 @@ class MultiTransitServiceArea(QgsProcessingAlgorithm):
             if feedback.isCanceled():
                 return {}
 
-            reload(ServiceAreaSearch)
             name = point[name_field] if point[name_field] is not None else f"Point {point_count}"
             coord = point.geometry().asPoint()
             start_location = f"{coord.x()},{coord.y()} [{crs.authid()}]"
 
             ServiceAreaSearch.main(name, start_location, search_time, context, feedback)
+
+            point_count = point_count+1
 
 
 
