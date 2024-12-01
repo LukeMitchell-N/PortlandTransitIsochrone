@@ -1,2 +1,2 @@
 # TransitConnectivity
-Creating maps of the Portland, OR Metro area including the area's level of connectivity through transit
+Tool to create Trimet transit service area layers for any point in the Portland metro area
